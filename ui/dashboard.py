@@ -1,121 +1,210 @@
+from ui.frequency_table import FrequencyTable
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
+    QComboBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
-    QComboBox,
-    QFrame
+    QMainWindow,
+    QVBoxLayout,
+    QWidget,
 )
 
-
-from PySide6.QtCore import Qt, Signal
+from core.analyzer import Analyzer
 from core.websocket_client import DerivWebSocket
+from ui.cards import InfoCard
+
+
+MARKETS = {
+    "Volatility 10 Index": "R_10",
+    "Volatility 25 Index": "R_25",
+    "Volatility 50 Index": "R_50",
+    "Volatility 75 Index": "R_75",
+    "Volatility 100 Index": "R_100",
+}
+
 
 class Dashboard(QMainWindow):
-    tick_received = Signal(float, str)
 
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("Deriv Analyzer Pro")
-        self.resize(1400, 800)
+        self.setWindowTitle("Analyzer Pro Match")
+        self.resize(1100, 700)
+
+        self.analyzer = Analyzer()
+        self.client = DerivWebSocket()
+
+        self.build_ui()
+        self.connect_signals()
+
+        self.client.connect_to_server()
+
+    # --------------------------------------------------
+
+    def build_ui(self):
 
         central = QWidget()
         self.setCentralWidget(central)
 
-        main = QVBoxLayout()
+        main_layout = QVBoxLayout(central)
 
-        # Header
+        # ---------------- Header ----------------
+
         header = QHBoxLayout()
 
-        title = QLabel("DERIV ANALYZER PRO")
-        title.setStyleSheet("font-size:28px;font-weight:bold;")
+        title = QLabel("Analyzer Pro Match")
+        title.setObjectName("title")
 
-        self.status = QLabel("🟢 Connected")
-        self.status.setStyleSheet("color:#00E676;font-size:16px;")
+        self.status = QLabel("🔴 Disconnected")
+        self.status.setObjectName("status_disconnected")
 
         header.addWidget(title)
         header.addStretch()
         header.addWidget(self.status)
 
-        main.addLayout(header)
+        main_layout.addLayout(header)
 
-        # Market Selection
-        market_layout = QHBoxLayout()
+        # ---------------- Controls ----------------
 
-        market_layout.addWidget(QLabel("Market"))
+        controls = QHBoxLayout()
+
+        controls.addWidget(QLabel("Market"))
 
         self.market = QComboBox()
 
-        self.market.addItems([
-            "Volatility 10",
-            "Volatility 25",
-            "Volatility 50",
-            "Volatility 75",
-            "Volatility 100"
+        for market in MARKETS.keys():
+            self.market.addItem(market)
+
+        controls.addWidget(self.market)
+
+        controls.addSpacing(20)
+
+        controls.addWidget(QLabel("Window"))
+
+        self.window = QComboBox()
+
+        self.window.addItems([
+            "25",
+            "50",
+            "100",
+            "250",
+            "500",
+            "1000",
+            "Session"
         ])
 
-        market_layout.addWidget(self.market)
-        market_layout.addStretch()
+        self.window.setCurrentText("100")
 
-        main.addLayout(market_layout)
+        controls.addWidget(self.window)
 
-        # Cards
-        cards = QHBoxLayout()
+        controls.addStretch()
 
-        self.tick_card = self.create_card("Current Tick", "----")
+        main_layout.addLayout(controls)
 
-        self.digit_card = self.create_card("Last Digit", "-")
+        # ---------------- Cards ----------------
 
-        self.total_card = self.create_card("Total Ticks", "0")
+        cards = QGridLayout()
 
-        cards.addWidget(self.tick_card)
-        cards.addWidget(self.digit_card)
-        cards.addWidget(self.total_card)
+        self.tick_card = InfoCard("Current Tick", "0")
+        self.digit_card = InfoCard("Last Digit", "-")
+        self.counter_card = InfoCard("Tick Count", "0")
 
-        main.addLayout(cards)
+        cards.addWidget(self.tick_card, 0, 0)
+        cards.addWidget(self.digit_card, 0, 1)
+        cards.addWidget(self.counter_card, 0, 2)
 
-        central.setLayout(main)
-        self.tick_label = self.tick_card.findChildren(QLabel)[1]
-        self.digit_label = self.digit_card.findChildren(QLabel)[1]
-        self.total_label = self.total_card.findChildren(QLabel)[1]
-        self.tick_count = 0
-        self.tick_received.connect(self.update_dashboard)
-        self.client = DerivWebSocket(self.receive_tick)
-        self.client.start("R_25")
+        main_layout.addLayout(cards)
 
-    def create_card(self, title, value):
+        # ---------------- Frequency Table ----------------
 
-        frame = QFrame()
+        self.table = FrequencyTable()
 
-        layout = QVBoxLayout()
+        main_layout.addWidget(self.table)
 
-        t = QLabel(title)
-        t.setAlignment(Qt.AlignCenter)
+        # ---------------- Last Digits ----------------
 
-        v = QLabel(value)
-        v.setAlignment(Qt.AlignCenter)
-        v.setStyleSheet("""
-            font-size:30px;
-            font-weight:bold;
-            color:#00E676;
-        """)
+        self.last_digits = QLabel("Last Digits: ")
+        self.last_digits.setWordWrap(True)
 
-        layout.addWidget(t)
-        layout.addWidget(v)
+        main_layout.addWidget(self.last_digits)
 
-        frame.setLayout(layout)
+    # --------------------------------------------------
 
-        return frame
-    
-    def receive_tick(self, quote, digit):
-        self.tick_received.emit(quote, digit)
+    def connect_signals(self):
 
-    def update_dashboard(self, quote, digit):
+        self.client.connected.connect(self.connected)
 
-        self.tick_count += 1
+        self.client.disconnected.connect(self.disconnected)
+
+        self.client.tick_received.connect(self.update_tick)
+
+        self.market.currentTextChanged.connect(
+            self.market_changed
+        )
+
+        self.window.currentTextChanged.connect(
+            lambda _: self.refresh_table()
+        )
+
+    # --------------------------------------------------
+
+    def connected(self):
+
+        self.status.setText("🟢 Connected")
+        self.status.setObjectName("status_connected")
+
+    # --------------------------------------------------
+
+    def disconnected(self):
+
+        self.status.setText("🔴 Disconnected")
+        self.status.setObjectName("status_disconnected")
+
+    # --------------------------------------------------
+
+    def market_changed(self, text):
+
+        symbol = MARKETS[text]
+
+        self.client.subscribe(symbol)
+
+    # --------------------------------------------------
+
+    def update_tick(self, quote, digit):
         
-        self.tick_label.setText(str(quote))
-        self.digit_label.setText(str(digit))
-        self.total_label.setText(str(self.tick_count))
+        self.analyzer.process_tick(quote, digit)
+        
+        self.tick_card.set_value(f"{quote:.4f}")
+        self.digit_card.set_value(str(digit))
+        self.counter_card.set_value(
+            str(self.analyzer.get_total_ticks())
+        )
+        
+        window = self.window.currentText()
+        
+        if window.lower() == "session":
+            rows = self.analyzer.get_frequency_table("session")
+        else:
+            rows = self.analyzer.get_frequency_table(int(window))
+            
+        self.table.update_table(rows)
+        
+        history = self.analyzer.get_last_digits()
+        
+        self.last_digits.setText(
+            "Last Digits: " + " ".join(str(x) for x in history)
+        )
+
+    # --------------------------------------------------
+
+    def refresh_table(self):
+        
+        window = self.window.currentText()
+        
+        if window.lower() == "session":
+            rows = self.analyzer.get_frequency_table("session")
+        else:
+            rows = self.analyzer.get_frequency_table(int(window))
+
+        self.table.update_table(rows)

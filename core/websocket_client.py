@@ -1,59 +1,105 @@
 import json
-import threading
-import websocket
+
+from PySide6.QtCore import QObject, Signal, QUrl
+from PySide6.QtWebSockets import QWebSocket
+from PySide6.QtNetwork import QAbstractSocket
 
 
-class DerivWebSocket:
+class DerivWebSocket(QObject):
+    """
+    Handles the connection to the Deriv WebSocket API.
+    Emits signals whenever a new tick is received.
+    """
 
-    def __init__(self, on_tick_callback):
-        self.ws = None
-        self.on_tick_callback = on_tick_callback
+    connected = Signal()
+    disconnected = Signal()
+    tick_received = Signal(float, int)
+    error = Signal(str)
 
-    def start(self, symbol="R_25"):
-        thread = threading.Thread(
-            target=self._connect,
-            args=(symbol,),
-            daemon=True
-        )
-        thread.start()
+    def __init__(self):
+        super().__init__()
 
-    def _connect(self, symbol):
+        self.ws = QWebSocket()
 
-        def on_open(ws):
-            print("Connected to Deriv")
+        self.current_symbol = "R_25"
 
-            ws.send(json.dumps({
-                "ticks": symbol,
-                "subscribe": 1
-            }))
+        self.ws.connected.connect(self.on_connected)
+        self.ws.disconnected.connect(self.on_disconnected)
+        self.ws.textMessageReceived.connect(self.on_message)
+        self.ws.errorOccurred.connect(self.on_error)
 
-        def on_message(ws, message):
+    # --------------------------------------------------
 
-            data = json.loads(message)
+    def connect_to_server(self):
+        print("Connecting to Deriv...")
 
-            if "tick" in data:
-
-                quote = data["tick"]["quote"]
-
-                last_digit = str(quote)[-1]
-
-                self.on_tick_callback(
-                    quote,
-                    last_digit
-                )
-
-        def on_error(ws, error):
-            print("Error:", error)
-
-        def on_close(ws, close_status_code, close_msg):
-            print("Disconnected")
-
-        self.ws = websocket.WebSocketApp(
-            "wss://ws.derivws.com/websockets/v3?app_id=1089",
-            on_open=on_open,
-            on_message=on_message,
-            on_error=on_error,
-            on_close=on_close
+        self.ws.open(
+            QUrl("wss://ws.derivws.com/websockets/v3?app_id=1089")
         )
 
-        self.ws.run_forever()
+    # --------------------------------------------------
+
+    def disconnect(self):
+
+        self.ws.close()
+
+    # --------------------------------------------------
+
+    def subscribe(self, symbol):
+
+        self.current_symbol = symbol
+
+        request = {
+            "ticks": symbol,
+            "subscribe": 1
+        }
+
+        self.ws.sendTextMessage(json.dumps(request))
+
+    # --------------------------------------------------
+
+    def on_connected(self):
+
+        print("✅ Connected!")
+
+        self.connected.emit()
+
+        self.subscribe(self.current_symbol)
+
+    # --------------------------------------------------
+
+    def on_disconnected(self):
+
+        print("❌ Disconnected")
+
+        self.disconnected.emit()
+
+    # --------------------------------------------------
+
+    def on_error(self, socket_error):
+
+        print("WebSocket Error:", socket_error)
+
+        self.error.emit(str(error))
+
+    # --------------------------------------------------
+
+    def on_message(self, message):
+    
+     data = json.loads(message)
+    
+     if "tick" not in data:
+        return
+
+     tick = data["tick"]
+
+     quote = tick["quote"]
+     pip_size = tick["pip_size"]
+
+     quote_str = f"{quote:.{pip_size}f}"
+     digit = int(quote_str[-1])
+
+     self.tick_received.emit(
+        float(quote),
+        digit
+     )
