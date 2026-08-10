@@ -1,4 +1,5 @@
 import json
+from urllib import request
 
 from PySide6.QtCore import QObject, Signal, QUrl
 from PySide6.QtWebSockets import QWebSocket
@@ -47,12 +48,16 @@ class DerivWebSocket(QObject):
 
     def subscribe(self, symbol):
 
+        print(f"Subscribing to: {symbol}")
+
         self.current_symbol = symbol
 
         request = {
             "ticks": symbol,
             "subscribe": 1
         }
+
+        print(json.dumps(request))
 
         self.ws.sendTextMessage(json.dumps(request))
 
@@ -80,11 +85,13 @@ class DerivWebSocket(QObject):
 
         print("WebSocket Error:", socket_error)
 
-        self.error.emit(str(error))
+        self.error.emit(str(socket_error))
 
     # --------------------------------------------------
 
     def on_message(self, message):
+     
+     print("RAW:", message)
     
      data = json.loads(message)
     
@@ -98,6 +105,8 @@ class DerivWebSocket(QObject):
 
      quote_str = f"{quote:.{pip_size}f}"
      digit = int(quote_str[-1])
+
+     print("Tick received")
 
      self.tick_received.emit(
         float(quote),

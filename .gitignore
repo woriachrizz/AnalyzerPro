@@ -1,21 +1,32 @@
-# Python
+# Python cache
 __pycache__/
 *.py[cod]
 *.pyo
-*.pyd
 
-# Virtual environment
+# Virtual environments
 .venv/
+venv/
+env/
 
-# VS Code
+# IDE
 .vscode/
+.idea/
 
-# Database
-*.db
+# Environment/secrets
+.env
+.env.*
+
+# Build/output
+build/
+dist/
+*.egg-info/
 
 # Logs
 *.log
 
 # OS files
-Thumbs.db
 .DS_Store
+Thumbs.db
+
+# Temporary testing
+test_deriv.py
