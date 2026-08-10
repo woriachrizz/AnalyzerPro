@@ -86,3 +86,4 @@ class Dashboard(QMainWindow):
         self.setCentralWidget(tabs)
 
         # Start websocket once
+        self.client.connect_to_server()

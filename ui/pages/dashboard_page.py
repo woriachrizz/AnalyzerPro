@@ -17,15 +17,15 @@ from ui.widgets.digit_stream import DigitStream
 
 MARKETS = {
     "Volatility 10 Index": "R_10",
-    "Volatility 10 1s Index": "R_10_1s",
+    "Volatility 10 (1s) Index": "1HZ10V",
     "Volatility 25 Index": "R_25",
-    "Volatility 25 1s Index": "R_25_1s",
+    "Volatility 25 (1s) Index": "1HZ25V",
     "Volatility 50 Index": "R_50",
-    "Volatility 50 1s Index": "R_50_1s",
+    "Volatility 50 (1s) Index": "1HZ50V",
     "Volatility 75 Index": "R_75",
-    "Volatility 75 1s Index": "R_75_1s",
+    "Volatility 75 (1s) Index": "1HZ75V",
     "Volatility 100 Index": "R_100",
-    "Volatility 100 1s Index": "R_100_1s",
+    "Volatility 100 (1s) Index": "1HZ100V",
 }
 
 
@@ -43,7 +43,6 @@ class DashboardPage(QWidget):
         self.build_ui()
         self.connect_signals()
 
-        self.client.connect_to_server()
 
     # --------------------------------------------------
 
