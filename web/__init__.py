@@ -1,0 +1,1 @@
+"""Analyzer Pro browser application."""
