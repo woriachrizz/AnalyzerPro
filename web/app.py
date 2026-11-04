@@ -84,8 +84,7 @@ with st.sidebar:
     st.divider()
     st.markdown("**STREAM CONTROL**")
     if st.button("Connect to Deriv", use_container_width=True, type="primary", disabled=st.session_state.connection_status in ("Connected", "Reconnecting")):
-        app_id = str(st.secrets.get("DERIV_APP_ID", os.getenv("DERIV_APP_ID", "1089")))
-        stream = DerivStream(app_id=app_id, symbol=st.session_state.selected_symbol)
+        stream = DerivStream(symbol=st.session_state.selected_symbol)
         st.session_state.stream = stream
         stream.start()
         st.session_state.connection_status = "Connecting"
