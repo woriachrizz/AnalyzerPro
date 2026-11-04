@@ -47,10 +47,12 @@ st.markdown("""
 
 def init_state():
     defaults = {
-        "analyzer": Analyzer(), "stream": None, "connection_status": "disconnected",
+        "stream": None, "connection_status": "disconnected",
         "connection_message": "Not connected", "ticks": deque(maxlen=500),
         "prediction": None, "last_market": "Volatility 25 Index", "last_precision": 3,
     }
+    if "analyzer" not in st.session_state:
+        st.session_state.analyzer = Analyzer()
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
