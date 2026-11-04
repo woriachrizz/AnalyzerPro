@@ -27,10 +27,10 @@ class StatisticsPanel(QWidget):
 
         # ---------- Row 2 ----------
 
-        self.match_card = InfoCard("Match %", "0.00")
-        self.differ_card = InfoCard("Differ %", "0.00")
-        self.match_streak = InfoCard("Match Streak", "0")
-        self.differ_streak = InfoCard("Differ Streak", "0")
+        self.match_card = InfoCard("Prediction Hit %", "0.00")
+        self.differ_card = InfoCard("Prediction Miss %", "0.00")
+        self.match_streak = InfoCard("Hit Streak", "0")
+        self.differ_streak = InfoCard("Miss Streak", "0")
 
         layout.addWidget(self.match_card, 1, 0)
         layout.addWidget(self.differ_card, 1, 1)

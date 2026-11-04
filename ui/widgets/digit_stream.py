@@ -51,3 +51,8 @@ class DigitStream(QWidget):
                 label.setText(self.digits[i])
             else:
                 label.setText("-")
+
+    def clear(self):
+        self.digits.clear()
+        for label in self.labels:
+            label.setText("-")

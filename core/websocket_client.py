@@ -1,6 +1,6 @@
 import json
 
-from PySide6.QtCore import QObject, Signal, QUrl
+from PySide6.QtCore import QObject, Signal, QTimer, QUrl
 from PySide6.QtWebSockets import QWebSocket
 from PySide6.QtNetwork import QAbstractSocket
 
@@ -18,7 +18,7 @@ class DerivWebSocket(QObject):
 
     connected = Signal()
     disconnected = Signal()
-    tick_received = Signal(float, int)
+    tick_received = Signal(float, int, str)
     error = Signal(str)
     symbols_received = Signal(dict)
 
@@ -30,7 +30,16 @@ class DerivWebSocket(QObject):
         self.ws = QWebSocket()
 
         self.current_symbol = None
+        self.subscription_id = None
         self.connected_once = False
+        self.display_precision = 3
+        self.reconnect_delay = 1000
+        self.reconnect_timer = QTimer(self)
+        self.reconnect_timer.setSingleShot(True)
+        self.reconnect_timer.timeout.connect(self.connect_to_server)
+        self.keepalive_timer = QTimer(self)
+        self.keepalive_timer.setInterval(25000)
+        self.keepalive_timer.timeout.connect(self.send_keepalive)
 
         self.ws.connected.connect(self.on_connected)
         self.ws.disconnected.connect(self.on_disconnected)
@@ -44,13 +53,31 @@ class DerivWebSocket(QObject):
     def connect_to_server(self):
 
         if self.ws.state() == QAbstractSocket.ConnectedState:
-            print("Already connected.")
+            return
+
+        if self.ws.state() != QAbstractSocket.UnconnectedState:
+            self.schedule_reconnect()
             return
 
         print("Connecting to Deriv public WebSocket...")
         print(f"URL: {self.PUBLIC_URL}")
 
         self.ws.open(QUrl(self.PUBLIC_URL))
+
+    def set_display_precision(self, precision):
+        self.display_precision = int(precision)
+
+    def schedule_reconnect(self):
+        if self.reconnect_timer.isActive():
+            return
+        delay = self.reconnect_delay
+        self.reconnect_delay = min(self.reconnect_delay * 2, 30000)
+        print(f"Reconnecting to Deriv in {delay / 1000:g}s...")
+        self.reconnect_timer.start(delay)
+
+    def send_keepalive(self):
+        if self.ws.state() == QAbstractSocket.ConnectedState:
+            self.ws.sendTextMessage(json.dumps({"ping": 1}))
 
     # --------------------------------------------------
 
@@ -68,11 +95,17 @@ class DerivWebSocket(QObject):
         print("✅ Connected to Deriv!")
 
         self.connected_once = True
+        self.subscription_id = None
+        self.reconnect_delay = 1000
+        self.reconnect_timer.stop()
+        self.keepalive_timer.start()
 
         self.connected.emit()
 
         # Request available symbols
         self.request_active_symbols()
+        if self.current_symbol:
+            self.subscribe(self.current_symbol)
 
     # --------------------------------------------------
     # ACTIVE SYMBOLS
@@ -102,11 +135,19 @@ class DerivWebSocket(QObject):
             print("❌ Cannot subscribe: empty symbol")
             return
 
-        if self.ws.state() != QAbstractSocket.ConnectedState:
-            print("❌ Cannot subscribe: WebSocket not connected")
-            return
+        previous_symbol = self.current_symbol
+        if (
+            previous_symbol
+            and previous_symbol != symbol
+            and self.subscription_id
+            and self.ws.state() == QAbstractSocket.ConnectedState
+        ):
+            self.ws.sendTextMessage(json.dumps({"forget": self.subscription_id}))
 
         self.current_symbol = symbol
+
+        if self.ws.state() != QAbstractSocket.ConnectedState:
+            return
 
         request = {
             "ticks": symbol,
@@ -130,6 +171,8 @@ class DerivWebSocket(QObject):
         print("❌ Disconnected from Deriv")
 
         self.disconnected.emit()
+        self.keepalive_timer.stop()
+        self.schedule_reconnect()
 
     # --------------------------------------------------
     # ERROR
@@ -142,14 +185,13 @@ class DerivWebSocket(QObject):
         print("❌ WebSocket Error:", message)
 
         self.error.emit(message)
+        self.schedule_reconnect()
 
     # --------------------------------------------------
     # MESSAGE
     # --------------------------------------------------
 
     def on_message(self, message):
-
-        print("RAW:", message)
 
         try:
             data = json.loads(message)
@@ -222,6 +264,9 @@ class DerivWebSocket(QObject):
 
         if msg_type == "tick":
 
+            subscription = data.get("subscription") or {}
+            self.subscription_id = subscription.get("id", self.subscription_id)
+
             tick = data.get("tick")
 
             if not tick:
@@ -234,44 +279,13 @@ class DerivWebSocket(QObject):
                 print("⚠️ Tick has no quote")
                 return
 
-            pip_size = tick.get("pip_size")
-
-            # pip_size is optional in the new API.
-            if pip_size is not None:
-
-                quote_string = (
-                    f"{float(quote):.{int(pip_size)}f}"
-                )
-
-            else:
-
-                quote_string = str(quote)
-
-            # Last displayed decimal digit
-            digit = None
-
-            for character in reversed(quote_string):
-
-                if character.isdigit():
-
-                    digit = int(character)
-                    break
-
-            if digit is None:
-
-                print(
-                    "⚠️ Could not determine last digit"
-                )
-
-                return
-
-            print(
-                f"🎯 TICK: {quote_string} | DIGIT: {digit}"
-            )
+            quote_string = f"{float(quote):.{self.display_precision}f}"
+            digit = int(quote_string[-1])
 
             self.tick_received.emit(
                 float(quote),
-                digit
+                digit,
+                quote_string
             )
 
             return

@@ -33,7 +33,9 @@ class Dashboard(QMainWindow):
         )
 
         self.analysis_page = AnalysisPage(
-            self.analyzer
+            self.analyzer,
+            self.client,
+            self.dashboard_page.market,
         )
 
         self.inspector_page = InspectorPage(
@@ -54,13 +56,13 @@ class Dashboard(QMainWindow):
         tabs = QTabWidget()
 
         tabs.addTab(
-            self.dashboard_page,
-            "Dashboard"
+            self.analysis_page,
+            "Market Analysis"
         )
 
         tabs.addTab(
-            self.analysis_page,
-            "Analysis"
+            self.dashboard_page,
+            "Live Dashboard"
         )
 
         tabs.addTab(
