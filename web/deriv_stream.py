@@ -27,8 +27,11 @@ class DerivStream:
         except queue.Full:
             try:
                 self.events.get_nowait()
-                self.events.put_nowait(event)
             except queue.Empty:
+                pass
+            try:
+                self.events.put_nowait(event)
+            except queue.Full:
                 pass
 
     def start(self, symbol):
