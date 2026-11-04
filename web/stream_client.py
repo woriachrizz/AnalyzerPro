@@ -12,8 +12,8 @@ import websocket
 class DerivStream:
     URL = "wss://api.derivws.com/trading/v1/options/ws/public"
 
-    def __init__(self, app_id: str = "1089", symbol: str = "R_25"):
-        self.url = f"{self.URL}?app_id={app_id}"
+    def __init__(self, symbol: str = "R_25"):
+        self.url = self.URL
         self.symbol = symbol
         self.events: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=5000)
         self._lock = threading.RLock()
